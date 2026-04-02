@@ -2,7 +2,7 @@
 
 ## Repositories
 
-### 🧒 user-services
+### 👤 user-services
 This repository is responsible for user management. It mainly works as a listener of **Keycloak** events through **RabbitMQ**, as Keycloak notifies it about new registrations. The service then processes this information to create the user in the database and sends it to the **account-services** for account creation.
 
 ### 📃 account-services 
