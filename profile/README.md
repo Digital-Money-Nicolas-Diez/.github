@@ -73,7 +73,7 @@ volumes:
 ### 📦 Database ERD
 
 As in most financial systems, a user has one account, and an account can have one or more activities. This business logic is represented in the database.
-U can check the ERD file [here](./PG-ERD.pgerd).
+U can check the ERD file [here](./PG-ERD).
 
 ![Testing kickoff](./ERD.png)
 
