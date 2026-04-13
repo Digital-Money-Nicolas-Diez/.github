@@ -1,5 +1,84 @@
 # 💸 Digital Money 💸
 
+## 🚀 Getting Started
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+
+### 1. Configure the hosts file
+
+This project uses a custom Keycloak hostname. You need to add the following line to your system's hosts file: 127.0.0.1 keycloak
+
+**Linux/Mac:**
+```bash
+echo "127.0.0.1 keycloak" | sudo tee -a /etc/hosts
+```
+
+**Windows** (run Notepad as Administrator and open the file): C:\Windows\System32\drivers\etc\hosts
+Add the following line at the end of the file: 127.0.0.1 keycloak
+
+### 2. Run the application
+
+```bash
+docker compose up --build
+```
+
+> ⚠️ The first time this runs it will take several minutes as it compiles all microservices from source.
+
+### 3. Access the services
+
+| Service | URL |
+|---|---|
+| Keycloak Admin Panel | http://localhost:8080/admin |
+| Keycloak Login/Register | http://keycloak:8080/realms/DH_BACKEND/account |
+| Eureka Dashboard | http://localhost:8761 |
+| RabbitMQ Management | http://localhost:15672 |
+| Users Service | http://localhost:8081 |
+| Account Service | http://localhost:8082 |
+
+> **Keycloak credentials:** `admin` / `admin`  
+> **RabbitMQ credentials:** `guest` / `guest`
+
+
+## 🔄 Application flow
+
+```mermaid
+flowchart TD
+    subgraph Client
+        WEB[Web browser]
+        API[API client]
+    end
+
+    subgraph Infrastructure
+        KC[Keycloak\nAuth server]
+        RMQ[RabbitMQ\nkeycloak.events topic]
+        PG[(PostgreSQL)]
+    end
+
+    subgraph Microservices
+        US[user-service]
+        AS[account-service]
+    end
+
+    WEB -->|register via web UI| KC
+    API -->|login - password grant| KC
+    KC -->|REGISTER event| RMQ
+    RMQ -->|users.register queue| US
+    US -->|save user| PG
+    US -->|POST /api/accounts\nFeign + OAuth2| AS
+    AS -->|save account\nCVU + alias| PG
+    API -->|GET /balance\nBearer token| AS
+    AS -.->|verify JWT signature\nJWKS endpoint| KC
+
+    subgraph Retry flow
+        Q1[users.register] -->|failure| Q2[users.register.retry\nTTL 5s]
+        Q2 -->|re-enqueue| Q1
+        Q2 -->|max retries| DLQ[users.register.dlq]
+    end
+
+    RMQ --> Q1
+```
+
 ## Repositories
 
 ### 👤 user-services
