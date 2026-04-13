@@ -40,6 +40,19 @@ docker compose up --build
 > **RabbitMQ credentials:** `guest` / `guest`
 
 
+### Ports reference
+
+| Service | Port | Protocol |
+|---|---|---|
+| Keycloak | 8080 | HTTP |
+| user-service | 8081 | HTTP |
+| account-service | 8082 | HTTP |
+| Eureka | 8761 | HTTP |
+| RabbitMQ | 5672 | AMQP |
+| RabbitMQ Management | 15672 | HTTP |
+| PostgreSQL | 5432 | TCP |
+
+
 ## 🔄 Application flow
 
 ```mermaid
@@ -79,7 +92,40 @@ flowchart TD
     RMQ --> Q1
 ```
 
-## Repositories
+### Getting a token
+
+To test authenticated endpoints, first obtain a Bearer token from Keycloak.
+```http
+POST http://keycloak:8080/realms/DH_BACKEND/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+```
+
+**Body:**
+| Field | Value |
+|---|---|
+| `grant_type` | `password` |
+| `client_id` | `gateway` |
+| `username` | your registered username |
+| `password` | your registered password |
+
+**Response:** use the `access_token` field as a Bearer token in your requests.
+
+### Registering a user
+
+User registration is handled directly by Keycloak.
+Go to http://keycloak:8080/realms/DH_BACKEND/account and create an account.
+Once registered, the system automatically creates a bank account for the user.
+> ⚠️ Make sure you have configured the hosts file as described in the [Getting Started](#-getting-started) section. Otherwise replace `keycloak` with `localhost`.
+
+## 📖 API Documentation
+
+The endpoints are documented with Swagger UI and are available once the application is running:
+
+| Service | URL |
+|---|---|
+| Account Service | http://localhost:8082/swagger-ui/index.html |
+
+## 📚 Repositories
 
 ### 👤 user-services
 This repository is responsible for user management. It mainly works as a listener of **Keycloak** events through **RabbitMQ**, as Keycloak notifies it about new registrations. The service then processes this information to create the user in the database and sends it to the **account-services** for account creation.
@@ -107,46 +153,119 @@ This repository is responsible for services discovery.
 
 ```
 services:
+
   postgres:
     image: postgres:15
     container_name: postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: <database>
-      POSTGRES_USER: <user>
-      POSTGRES_PASSWORD: <pass>
+      POSTGRES_DB: app_db
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_pass
       TZ: UTC
       PGTZ: UTC
     ports:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d app_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   keycloak:
-    image: ghcr.io/digital-money-nicolas-diez/keycloak-docker-image:1.0.0
+    restart: unless-stopped
+    image: ghcr.io/digital-money-nicolas-diez/keycloak-docker-image:1.0.1
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/app_db
-      KC_DB_USERNAME: <user>
-      KC_DB_PASSWORD: <pass>
-      KEYCLOAK_ADMIN: <user>
-      KEYCLOAK_ADMIN_PASSWORD: <pass>
+      KC_DB_USERNAME: app_user
+      KC_DB_PASSWORD: app_pass
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HOSTNAME_ADMIN: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
     ports:
       - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   rabbitmq:
     image: rabbitmq:4.2.2-management
-    container_name: rabbitmq
+    container_name: rabbitmqv
     restart: unless-stopped
     ports:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: <user>
-      RABBITMQ_DEFAULT_PASS: <pass>
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-service:
+    build:
+      context: https://github.com/Digital-Money-Nicolas-Diez/users-service.git#master
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/app_db?options=-c%20TimeZone=UTC
+      SPRING_RABBITMQ_HOST: rabbitmq
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      EUREKA_URI: http://eureka-service:8761/eureka
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/DH_BACKEND/protocol/openid-connect/token
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      eureka-service:
+        condition: service_started
+
+  account-service:
+    build:
+      context: https://github.com/Digital-Money-Nicolas-Diez/account-service.git#master
+      dockerfile: Dockerfile
+    container_name: account-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/app_db?options=-c%20TimeZone=UTC
+      EUREKA_URI: http://eureka-service:8761/eureka
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/DH_BACKEND
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      eureka-service:
+        condition: service_started
+
+  eureka-service:
+    build:
+      context: https://github.com/Digital-Money-Nicolas-Diez/eureka-server.git#main
+      dockerfile: Dockerfile
+    container_name: eureka
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
 
 volumes:
   pg_data:
+
 ```
 
 ### 📦 Database ERD
