@@ -32,7 +32,7 @@ Add the following line at the end: 127.0.0.1 keycloak
 **Full Docker — just want to use the app**  
 Run everything with Docker:
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml up --build
 ```
 
 **Hybrid — development mode**  
