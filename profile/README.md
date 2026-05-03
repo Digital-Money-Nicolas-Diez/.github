@@ -24,8 +24,14 @@ This project uses a custom Keycloak hostname. Add the following line to your sys
 echo "127.0.0.1 keycloak" | sudo tee -a /etc/hosts
 ```
 
-**Windows** (run Notepad as Administrator and open the file): C:\Windows\System32\drivers\etc\hosts  
-Add the following line at the end: 127.0.0.1 keycloak
+**Windows** (run Notepad as Administrator and open the file)
+```bash
+C:\Windows\System32\drivers\etc\hosts  
+```
+Add the following line at the end
+```bash
+ 127.0.0.1 keycloak
+```
 
 ### 3. Run the application
 
@@ -47,14 +53,15 @@ Then run `user-service` and `account-service` locally. This allows you to test a
 | Service | URL |
 |---|---|
 | Keycloak Admin Panel | http://localhost:8080/admin |
-| Keycloak Login/Register | http://keycloak:8080/realms/DH_BACKEND/account |
+| Keycloak Login/Register | http://localhost:8080/realms/DH_BACKEND/account |
 | Eureka Dashboard | http://localhost:8761 |
 | RabbitMQ Management | http://localhost:15672 |
 | Users Service | http://localhost:8081 |
 | Account Service | http://localhost:8082 |
 
 > **Keycloak credentials:** `admin` / `admin`  
-> **RabbitMQ credentials:** `guest` / `guest`
+> **RabbitMQ credentials:** `guest` / `guest` <br />
+> Note: In Full Docker mode, replace **localhost** with **keycloak** in all Keycloak URLs (e.g. http://keycloak:8080/realms/...).
 
 ### Ports reference
 
