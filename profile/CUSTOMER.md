@@ -1,4 +1,4 @@
-# 🐳 Full Docker Mode
+# 🐳 Customer Mode
 
 Run the entire application with Docker. No local Java or Maven setup required.
 
